@@ -217,15 +217,57 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("misoca") === "connected") {
       setMisocaStatus("connected");
+      // localStorageから見積データを復元
+      try {
+        const saved = localStorage.getItem("estimate_backup");
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.input) setInput(data.input);
+          if (data.estimate) setEstimate(data.estimate);
+          if (data.selectedPlan !== undefined) setSelectedPlan(data.selectedPlan);
+          if (data.ctx) {
+            ctx.current = data.ctx;
+          }
+          setPhase("result");
+          setActiveTab("misoca");
+          localStorage.removeItem("estimate_backup");
+        }
+      } catch {}
       window.history.replaceState({}, "", "/");
     }
     if (params.get("error") === "misoca_auth_failed" || params.get("error") === "misoca_token_failed") {
       setMisocaError("Misoca認証に失敗しました。もう一度お試しください。");
+      // 失敗時もデータ復元
+      try {
+        const saved = localStorage.getItem("estimate_backup");
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.input) setInput(data.input);
+          if (data.estimate) setEstimate(data.estimate);
+          if (data.selectedPlan !== undefined) setSelectedPlan(data.selectedPlan);
+          if (data.ctx) ctx.current = data.ctx;
+          setPhase("result");
+          setActiveTab("misoca");
+          localStorage.removeItem("estimate_backup");
+        }
+      } catch {}
       window.history.replaceState({}, "", "/");
     }
   }, []);
 
   /* ─── Misocaで見積書作成 ─── */
+  const saveThenRedirectToMisoca = () => {
+    try {
+      localStorage.setItem("estimate_backup", JSON.stringify({
+        input,
+        estimate,
+        selectedPlan,
+        ctx: ctx.current,
+      }));
+    } catch {}
+    window.location.href = misocaAuthUrl;
+  };
+
   const createMisocaEstimate = async () => {
     if (!estimate || misocaStatus !== "connected") return;
     setMisocaCreating(true);
@@ -297,7 +339,7 @@ export default function Home() {
                   <div key={f.key} className={f.key === "companyName" ? "md:col-span-2" : ""}>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
                     <input className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder={f.ph} value={(input as unknown as Record<string,string>)[f.key] || ""}
+                      placeholder={f.ph} value={(input as Record<string,string>)[f.key] || ""}
                       onChange={e => setInput(p => ({ ...p, [f.key]: e.target.value }))} />
                   </div>
                 ))}
@@ -513,6 +555,7 @@ export default function Home() {
                     companyName={input.companyName}
                     onCreate={createMisocaEstimate}
                     onRecheck={checkMisoca}
+                    onAuth={saveThenRedirectToMisoca}
                   />
                 )}
               </div>
@@ -824,11 +867,11 @@ function ReviewView({ r }: { r: SubAgentReview }) {
 }
 
 /* ─── Misoca連携パネル ─── */
-function MisocaPanel({ status, authUrl, creating, result, error, planLabel, companyName, onCreate, onRecheck }: {
+function MisocaPanel({ status, authUrl, creating, result, error, planLabel, companyName, onCreate, onRecheck, onAuth }: {
   status: string; authUrl: string; creating: boolean;
   result: { id: string; url: string } | null; error: string;
   planLabel: string; companyName: string;
-  onCreate: () => void; onRecheck: () => void;
+  onCreate: () => void; onRecheck: () => void; onAuth: () => void;
 }) {
   return (
     <div>
@@ -877,8 +920,8 @@ function MisocaPanel({ status, authUrl, creating, result, error, planLabel, comp
         {status === "disconnected" && (
           <div className="text-sm text-gray-600">
             <p className="mb-2">Misocaアカウントと連携して、見積書PDFを自動作成できます。</p>
-            <a href={authUrl}
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+            <a href="#" onClick={(e) => { e.preventDefault(); onAuth(); }}
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
               🔑 Misocaと連携する
             </a>
           </div>
