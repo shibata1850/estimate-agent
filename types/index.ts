@@ -184,3 +184,22 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
+/* ─── Misoca ─── */
+export interface MisocaToken {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+}
+
+export interface MisocaEstimate {
+  subject: string;
+  issue_date: string;
+  recipient_name: string;
+  items: {
+    name: string;
+    quantity: number;
+    unit_price: number;
+    unit: string;
+    description?: string;
+  }[];
+}
