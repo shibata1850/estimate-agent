@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap');
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+/* ─── スクロールバー ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f3f4f6; }
+::-webkit-scrollbar-thumb { background: #c4c4cc; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9999a6; }
+
+/* ─── SSEテキストのタイピング演出 ─── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.typing-cursor::after {
+  content: '▋';
+  animation: blink 0.8s ease-in-out infinite;
+  color: #2563eb;
+  margin-left: 2px;
+}
+
+/* ─── ステップ進捗バー ─── */
+@keyframes progressPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.progress-active {
+  animation: progressPulse 1.5s ease-in-out infinite;
+}
+
+/* ─── カード ─── */
+.card {
+  @apply bg-bg-2 border border-line rounded-xl;
+}
+
+.card-hover {
+  @apply card transition-all duration-200 hover:border-line-hover hover:bg-bg-3;
+}
+
+/* ─── フォーム ─── */
+.input-field {
+  @apply w-full bg-bg-1 border border-line rounded-lg px-4 py-3 text-fg-0 text-sm
+         placeholder-fg-3 transition-colors duration-200
+         focus:outline-none focus:border-blue focus:ring-1 focus:ring-blue/30;
+}
+
+.label-text {
+  @apply block text-sm font-medium text-fg-1 mb-1.5;
+}

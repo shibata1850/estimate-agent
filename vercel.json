@@ -1,0 +1,8 @@
+{
+  "regions": ["hnd1"],
+  "functions": {
+    "app/api/analyze/route.ts": { "maxDuration": 120 },
+    "app/api/analyze/questions/route.ts": { "maxDuration": 60 },
+    "app/api/misoca/estimate/route.ts": { "maxDuration": 30 }
+  }
+}
