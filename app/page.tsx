@@ -473,6 +473,9 @@ export default function Home() {
                     error={misocaError}
                     planLabel={plan?.tierLabel || ""}
                     companyName={input.companyName}
+                    estimate={estimate}
+                    plan={plan}
+                    fmt={fmt}
                     onCreate={createMisocaEstimate}
                   />
                 )}
@@ -785,12 +788,16 @@ function ReviewView({ r }: { r: SubAgentReview }) {
 }
 
 /* ─── Misoca連携パネル ─── */
-function MisocaPanel({ creating, result, error, planLabel, companyName, onCreate }: {
+function MisocaPanel({ creating, result, error, planLabel, companyName, estimate, plan, fmt, onCreate }: {
   creating: boolean;
   result: { id: string; url: string } | null; error: string;
   planLabel: string; companyName: string;
+  estimate: EstimateData | null; plan: EstimatePlan | undefined;
+  fmt: (n: number) => string;
   onCreate: () => void;
 }) {
+  const today = new Date().toISOString().split("T")[0];
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
@@ -801,17 +808,108 @@ function MisocaPanel({ creating, result, error, planLabel, companyName, onCreate
         </div>
       </div>
 
-      {/* 見積書作成 */}
-      <div className="border rounded-lg p-4">
-        <h4 className="font-bold text-sm mb-3">📝 見積書を作成</h4>
-        <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm">
-          <p>以下の内容でMisocaに見積書を作成します:</p>
-          <div className="mt-2 space-y-1">
-            <p>• <strong>プラン:</strong> {planLabel}</p>
-            <p>• <strong>宛先:</strong> {companyName}</p>
+      {/* 見積書プレビュー */}
+      {estimate && plan && (
+        <div className="border-2 border-gray-300 rounded-lg mb-4 bg-white">
+          {/* ヘッダー */}
+          <div className="border-b border-gray-300 p-6">
+            <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">御 見 積 書</h2>
+            <div className="flex justify-between">
+              <div>
+                <p className="text-lg font-bold text-gray-800">{companyName} 御中</p>
+                <p className="text-sm text-gray-500 mt-2">件名: {estimate.title}（{planLabel}）</p>
+              </div>
+              <div className="text-right text-sm text-gray-600">
+                <p>発行日: {today}</p>
+                {estimate.validUntil && <p>有効期限: {estimate.validUntil}</p>}
+              </div>
+            </div>
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xl font-bold text-blue-800">
+                合計金額: {fmt(plan.total)}円
+                <span className="text-sm font-normal text-gray-500 ml-2">（税込）</span>
+              </p>
+            </div>
+          </div>
+
+          {/* 明細テーブル */}
+          <div className="p-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100 border-b-2 border-gray-300">
+                  <th className="text-left py-2 px-3 font-bold">品名</th>
+                  <th className="text-right py-2 px-3 font-bold w-20">数量</th>
+                  <th className="text-center py-2 px-3 font-bold w-16">単位</th>
+                  <th className="text-right py-2 px-3 font-bold w-28">単価</th>
+                  <th className="text-right py-2 px-3 font-bold w-28">金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.items.map((item, i) => (
+                  <tr key={i} className="border-b border-gray-200">
+                    <td className="py-2 px-3">
+                      <p className="font-medium">{item.name}</p>
+                      {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
+                    </td>
+                    <td className="text-right py-2 px-3">{item.quantity}</td>
+                    <td className="text-center py-2 px-3">{item.unit}</td>
+                    <td className="text-right py-2 px-3">{fmt(item.unitPrice)}</td>
+                    <td className="text-right py-2 px-3">{fmt(item.amount)}</td>
+                  </tr>
+                ))}
+                {plan.riskBuffer > 0 && (
+                  <tr className="border-b border-gray-200 bg-yellow-50">
+                    <td className="py-2 px-3">
+                      <p className="font-medium">リスクバッファ（予備費）</p>
+                    </td>
+                    <td className="text-right py-2 px-3">1</td>
+                    <td className="text-center py-2 px-3">式</td>
+                    <td className="text-right py-2 px-3">{fmt(plan.riskBuffer)}</td>
+                    <td className="text-right py-2 px-3">{fmt(plan.riskBuffer)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* 小計・税・合計 */}
+            <div className="mt-3 flex justify-end">
+              <div className="w-64 text-sm">
+                <div className="flex justify-between py-1 border-b border-gray-200">
+                  <span className="text-gray-600">小計</span>
+                  <span>{fmt(plan.subtotal + plan.riskBuffer)}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-200">
+                  <span className="text-gray-600">消費税（10%）</span>
+                  <span>{fmt(plan.tax)}</span>
+                </div>
+                <div className="flex justify-between py-2 font-bold text-base border-b-2 border-gray-800">
+                  <span>合計</span>
+                  <span>{fmt(plan.total)}円</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 備考 */}
+          <div className="border-t border-gray-300 p-4 text-xs text-gray-600 space-y-2">
+            {plan.deliveryDate && (
+              <p><strong>納期:</strong> {plan.deliveryDate}（約{plan.estimatedDays}営業日）</p>
+            )}
+            {estimate.paymentTerms && (
+              <p><strong>支払条件:</strong> {estimate.paymentTerms}</p>
+            )}
+            {plan.monthlyOperationCost > 0 && (
+              <p><strong>月額運用費（参考）:</strong> {fmt(plan.monthlyOperationCost)}円/月</p>
+            )}
+            {estimate.notes && (
+              <p><strong>備考:</strong> {estimate.notes}</p>
+            )}
           </div>
         </div>
+      )}
 
+      {/* 送信ボタン */}
+      <div className="border rounded-lg p-4">
         <button onClick={onCreate} disabled={creating}
           className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition-colors">
           {creating ? "⏳ 作成中..." : "📄 Misocaに見積書を送る"}
@@ -835,22 +933,6 @@ function MisocaPanel({ creating, result, error, planLabel, companyName, onCreate
             <p className="text-sm text-red-700">❌ {error}</p>
           </div>
         )}
-      </div>
-
-      {/* フロー説明 */}
-      <div className="mt-6 bg-gray-50 rounded-lg p-4">
-        <h4 className="font-bold text-sm mb-3">📊 Misoca連携の流れ</h4>
-        <div className="flex items-center gap-2 text-xs text-gray-600">
-          <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">AI分析</span>
-          <span>→</span>
-          <span className="bg-green-100 text-green-700 px-2 py-1 rounded">3プラン生成</span>
-          <span>→</span>
-          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">プラン選択</span>
-          <span>→</span>
-          <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded font-bold">Misoca PDF化</span>
-          <span>→</span>
-          <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded">顧客に送付</span>
-        </div>
       </div>
     </div>
   );
