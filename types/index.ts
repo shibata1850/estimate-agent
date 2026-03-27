@@ -190,6 +190,7 @@ export interface MisocaEstimate {
   issue_date: string;
   body: {
     contact_name: string;
+    contact_id?: string;
   };
   items: {
     name: string;

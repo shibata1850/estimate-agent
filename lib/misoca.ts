@@ -11,6 +11,20 @@ function getAccessToken(): string {
   return token;
 }
 
+/* ─── 取引先ID取得 ─── */
+async function fetchFirstContactId(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_URL}/contacts`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const contacts = await res.json();
+    return Array.isArray(contacts) && contacts.length > 0 ? contacts[0].id : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ─── 見積書作成 ─── */
 export async function createMisocaEstimate(
   estimate: EstimateData,
@@ -24,18 +38,21 @@ export async function createMisocaEstimate(
 
   if (!plan) throw new Error("指定されたプランが見つかりません");
 
+  const contactId = await fetchFirstContactId(accessToken);
+
   const body: MisocaEstimate = {
     subject: `${estimate.title}（${plan.tierLabel}）`,
     issue_date: today,
     body: {
       contact_name: recipientName,
+      ...(contactId ? { contact_id: contactId } : {}),
     },
     items: plan.items.map((item) => ({
       name: item.name,
       quantity: item.quantity,
       unit_price: item.unitPrice,
       unit: item.unit,
-      tax_type: "TAXABLE10",
+      tax_type: "TAXABLE",
       description: item.description,
     })),
   };
