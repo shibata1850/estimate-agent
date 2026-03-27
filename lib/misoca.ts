@@ -78,7 +78,7 @@ export async function createMisocaEstimate(
   const data = await res.json();
   return {
     id: data.id,
-    url: `${BASE_URL}/quotations/${data.id}`,
+    url: `${BASE_URL}/estimates/${data.id}`,
   };
 }
 

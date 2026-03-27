@@ -207,7 +207,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setMisocaResult(data);
+      setMisocaResult({ id: data.estimateId, url: data.url });
     } catch (err) {
       setMisocaError(err instanceof Error ? err.message : "見積書の作成に失敗しました");
     } finally { setMisocaCreating(false); }

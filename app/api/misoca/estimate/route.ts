@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     };
 
     const result = await createMisocaEstimate(estimate, recipientName, planIndex ?? 1);
-    return NextResponse.json(result);
+    return NextResponse.json({ estimateId: result.id, url: result.url });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "見積書の作成に失敗しました";
     return NextResponse.json({ error: message }, { status: 500 });
