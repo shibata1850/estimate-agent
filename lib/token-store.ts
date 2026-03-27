@@ -1,34 +1,41 @@
 /**
- * トークン保存（Cookie版 — Vercel対応）
+ * Misoca トークン Cookie ヘルパー
+ *
+ * 読み取り: cookies() (next/headers) — Route Handler / Server Component で利用可
+ * 書き込み: NextResponse.cookies.set() — レスポンスに直接セット
  */
 import { cookies } from "next/headers";
-import type { MisocaToken } from "@/types";
+import { NextResponse } from "next/server";
 
-const COOKIE_NAME = "misoca_token";
+const COOKIE_NAME = "misoca_access_token";
 
-export async function getToken(): Promise<MisocaToken | null> {
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "lax" as const,
+  maxAge: 86400, // 24時間
+  path: "/",
+};
+
+/** Cookie からアクセストークンを取得 */
+export async function getAccessToken(): Promise<string | null> {
   try {
-    const cookieStore = cookies();
-    const raw = cookieStore.get(COOKIE_NAME)?.value;
-    if (!raw) return null;
-    return JSON.parse(raw) as MisocaToken;
+    const store = await cookies();
+    return store.get(COOKIE_NAME)?.value ?? null;
   } catch {
     return null;
   }
 }
 
-export async function saveToken(token: MisocaToken): Promise<void> {
-  const cookieStore = cookies();
-  cookieStore.set(COOKIE_NAME, JSON.stringify(token), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30, // 30日
-    path: "/",
-  });
+/** レスポンスにアクセストークン Cookie をセット */
+export function setAccessTokenCookie(
+  response: NextResponse,
+  accessToken: string
+): void {
+  response.cookies.set(COOKIE_NAME, accessToken, COOKIE_OPTIONS);
 }
 
-export async function deleteToken(): Promise<void> {
-  const cookieStore = cookies();
-  cookieStore.delete(COOKIE_NAME);
+/** レスポンスからアクセストークン Cookie を削除 */
+export function deleteAccessTokenCookie(response: NextResponse): void {
+  response.cookies.delete(COOKIE_NAME);
 }
