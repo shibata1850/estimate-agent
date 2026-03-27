@@ -186,14 +186,17 @@ export interface ChatMessage {
 }
 /* ─── Misoca ─── */
 export interface MisocaEstimate {
-  subject: string;
+  subject?: string;
   issue_date: string;
-  recipient_name: string;
+  body: {
+    contact_name: string;
+  };
   items: {
     name: string;
     quantity: number;
     unit_price: number;
     unit: string;
+    tax_type: string;
     description?: string;
   }[];
 }

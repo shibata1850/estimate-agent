@@ -19,7 +19,7 @@ export async function createMisocaEstimate(
 ): Promise<{ id: string; url: string }> {
   const accessToken = getAccessToken();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0].replace(/-/g, "/");
   const plan = estimate.plans[planIndex];
 
   if (!plan) throw new Error("指定されたプランが見つかりません");
@@ -27,17 +27,20 @@ export async function createMisocaEstimate(
   const body: MisocaEstimate = {
     subject: `${estimate.title}（${plan.tierLabel}）`,
     issue_date: today,
-    recipient_name: recipientName,
+    body: {
+      contact_name: recipientName,
+    },
     items: plan.items.map((item) => ({
       name: item.name,
       quantity: item.quantity,
       unit_price: item.unitPrice,
       unit: item.unit,
+      tax_type: "TAXABLE10",
       description: item.description,
     })),
   };
 
-  const res = await fetch(`${API_URL}/estimates`, {
+  const res = await fetch(`${API_URL}/estimate`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
