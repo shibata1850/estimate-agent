@@ -1,7 +1,9 @@
-import type { EstimateData, MisocaEstimate } from "@/types";
+import type { EstimateData } from "@/types";
 
 const BASE_URL = "https://app.misoca.jp";
 const API_URL = "https://app.misoca.jp/api/v3";
+
+const DEFAULT_CONTACT_ID = 2869196;
 
 function getAccessToken(): string {
   const token = process.env.MISOCA_ACCESS_TOKEN;
@@ -11,17 +13,23 @@ function getAccessToken(): string {
   return token;
 }
 
-/* ─── 取引先ID取得 ─── */
-async function fetchFirstContactId(accessToken: string): Promise<string | null> {
+/* ─── 取引先ID取得（会社名で検索） ─── */
+async function findContactId(accessToken: string, companyName: string): Promise<number> {
   try {
     const res = await fetch(`${API_URL}/contacts`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return DEFAULT_CONTACT_ID;
+
     const contacts = await res.json();
-    return Array.isArray(contacts) && contacts.length > 0 ? contacts[0].id : null;
+    if (!Array.isArray(contacts) || contacts.length === 0) return DEFAULT_CONTACT_ID;
+
+    const match = contacts.find(
+      (c: { name?: string }) => c.name && c.name.includes(companyName)
+    );
+    return match ? Number(match.id) : Number(contacts[0].id);
   } catch {
-    return null;
+    return DEFAULT_CONTACT_ID;
   }
 }
 
@@ -33,27 +41,23 @@ export async function createMisocaEstimate(
 ): Promise<{ id: string; url: string }> {
   const accessToken = getAccessToken();
 
-  const today = new Date().toISOString().split("T")[0].replace(/-/g, "/");
+  const today = new Date().toISOString().split("T")[0];
   const plan = estimate.plans[planIndex];
 
   if (!plan) throw new Error("指定されたプランが見つかりません");
 
-  const contactId = await fetchFirstContactId(accessToken);
+  const contactId = await findContactId(accessToken, recipientName);
 
-  const body: MisocaEstimate = {
-    subject: `${estimate.title}（${plan.tierLabel}）`,
+  const body = {
     issue_date: today,
-    body: {
-      contact_name: recipientName,
-      ...(contactId ? { contact_id: contactId } : {}),
-    },
+    contact_id: contactId,
+    subject: `${estimate.title}（${plan.tierLabel}）`,
     items: plan.items.map((item) => ({
       name: item.name,
       quantity: item.quantity,
       unit_price: item.unitPrice,
-      unit: item.unit,
-      tax_type: "TAXABLE",
-      description: item.description,
+      unit_name: item.unit,
+      tax_type: "STANDARD_TAX_10",
     })),
   };
 

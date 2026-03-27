@@ -185,19 +185,17 @@ export interface ChatMessage {
   content: string;
 }
 /* ─── Misoca ─── */
-export interface MisocaEstimate {
-  subject?: string;
+export interface MisocaEstimateItem {
+  name: string;
+  quantity: number;
+  unit_price: number;
+  unit_name: string;
+  tax_type: string;
+}
+
+export interface MisocaEstimateRequest {
   issue_date: string;
-  body: {
-    contact_name: string;
-    contact_id?: string;
-  };
-  items: {
-    name: string;
-    quantity: number;
-    unit_price: number;
-    unit: string;
-    tax_type: string;
-    description?: string;
-  }[];
+  contact_id: number;
+  subject: string;
+  items: MisocaEstimateItem[];
 }
