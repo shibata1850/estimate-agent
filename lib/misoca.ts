@@ -20,23 +20,64 @@ export function getAuthUrl(): string {
  * トークンの Cookie 保存は呼び出し元（callback route）が NextResponse 経由で行う。
  */
 export async function exchangeCode(code: string): Promise<MisocaToken> {
-  const res = await fetch(`${BASE_URL}/oauth2/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      client_id: process.env.MISOCA_CLIENT_ID!,
-      client_secret: process.env.MISOCA_CLIENT_SECRET!,
-      redirect_uri: process.env.MISOCA_REDIRECT_URI!,
-    }),
+  const clientId = process.env.MISOCA_CLIENT_ID;
+  const clientSecret = process.env.MISOCA_CLIENT_SECRET;
+  const redirectUri = process.env.MISOCA_REDIRECT_URI;
+
+  console.log("[exchangeCode] env check:", {
+    MISOCA_CLIENT_ID: clientId ? `${clientId.slice(0, 4)}...(${clientId.length}chars)` : "MISSING",
+    MISOCA_CLIENT_SECRET: clientSecret ? `${clientSecret.slice(0, 4)}...(${clientSecret.length}chars)` : "MISSING",
+    MISOCA_REDIRECT_URI: redirectUri ?? "MISSING",
   });
 
-  if (!res.ok) {
-    throw new Error(`Misoca token exchange failed: ${res.status}`);
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error("Misoca環境変数が未設定です: " + [
+      !clientId && "MISOCA_CLIENT_ID",
+      !clientSecret && "MISOCA_CLIENT_SECRET",
+      !redirectUri && "MISOCA_REDIRECT_URI",
+    ].filter(Boolean).join(", "));
   }
 
-  const data = await res.json();
+  const tokenUrl = `${BASE_URL}/oauth2/token`;
+  const params = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+  });
+
+  console.log("[exchangeCode] POST", tokenUrl);
+  console.log("[exchangeCode] params:", {
+    grant_type: "authorization_code",
+    code: code.slice(0, 8) + "...",
+    client_id: clientId.slice(0, 4) + "...",
+    redirect_uri: redirectUri,
+  });
+
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+
+  console.log("[exchangeCode] response status:", res.status, res.statusText);
+  console.log("[exchangeCode] response headers:", Object.fromEntries(res.headers.entries()));
+
+  const rawBody = await res.text();
+  console.log("[exchangeCode] response body:", rawBody);
+
+  if (!res.ok) {
+    throw new Error(`Misoca token exchange failed: ${res.status} ${rawBody}`);
+  }
+
+  const data = JSON.parse(rawBody);
+  console.log("[exchangeCode] token received:", {
+    access_token: data.access_token ? `${data.access_token.slice(0, 8)}...(${data.access_token.length}chars)` : "MISSING",
+    refresh_token: data.refresh_token ? "present" : "MISSING",
+    expires_in: data.expires_in,
+  });
+
   return {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
