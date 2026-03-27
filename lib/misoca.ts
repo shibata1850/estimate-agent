@@ -37,7 +37,7 @@ export async function createMisocaEstimate(
     })),
   };
 
-  const res = await fetch(`${API_URL}/quotation`, {
+  const res = await fetch(`${API_URL}/estimates`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
