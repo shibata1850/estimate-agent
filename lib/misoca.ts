@@ -1,95 +1,12 @@
-import type { MisocaToken, EstimateData, MisocaEstimate } from "@/types";
-import { getAccessToken } from "./token-store";
+import type { EstimateData, MisocaEstimate } from "@/types";
 
 const BASE_URL = "https://app.misoca.jp";
 const API_URL = "https://app.misoca.jp/api/v3";
 
-/* ─── OAuth 2.0 ─── */
-export function getAuthUrl(): string {
-  const params = new URLSearchParams({
-    client_id: process.env.MISOCA_CLIENT_ID!,
-    redirect_uri: process.env.MISOCA_REDIRECT_URI!,
-    response_type: "code",
-    scope: "write",
-  });
-  return `${BASE_URL}/oauth2/authorize?${params.toString()}`;
-}
-
-/**
- * 認可コードをトークンに交換する。
- * トークンの Cookie 保存は呼び出し元（callback route）が NextResponse 経由で行う。
- */
-export async function exchangeCode(code: string): Promise<MisocaToken> {
-  const clientId = process.env.MISOCA_CLIENT_ID;
-  const clientSecret = process.env.MISOCA_CLIENT_SECRET;
-  const redirectUri = process.env.MISOCA_REDIRECT_URI;
-
-  console.log("[exchangeCode] env check:", {
-    MISOCA_CLIENT_ID: clientId ? `${clientId.slice(0, 4)}...(${clientId.length}chars)` : "MISSING",
-    MISOCA_CLIENT_SECRET: clientSecret ? `${clientSecret.slice(0, 4)}...(${clientSecret.length}chars)` : "MISSING",
-    MISOCA_REDIRECT_URI: redirectUri ?? "MISSING",
-  });
-
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error("Misoca環境変数が未設定です: " + [
-      !clientId && "MISOCA_CLIENT_ID",
-      !clientSecret && "MISOCA_CLIENT_SECRET",
-      !redirectUri && "MISOCA_REDIRECT_URI",
-    ].filter(Boolean).join(", "));
-  }
-
-  const tokenUrl = `${BASE_URL}/oauth2/token`;
-  const params = new URLSearchParams({
-    grant_type: "authorization_code",
-    code,
-    client_id: clientId,
-    client_secret: clientSecret,
-    redirect_uri: redirectUri,
-  });
-
-  console.log("[exchangeCode] POST", tokenUrl);
-  console.log("[exchangeCode] params:", {
-    grant_type: "authorization_code",
-    code: code.slice(0, 8) + "...",
-    client_id: clientId.slice(0, 4) + "...",
-    redirect_uri: redirectUri,
-  });
-
-  const res = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params,
-  });
-
-  console.log("[exchangeCode] response status:", res.status, res.statusText);
-  console.log("[exchangeCode] response headers:", Object.fromEntries(res.headers.entries()));
-
-  const rawBody = await res.text();
-  console.log("[exchangeCode] response body:", rawBody);
-
-  if (!res.ok) {
-    throw new Error(`Misoca token exchange failed: ${res.status} ${rawBody}`);
-  }
-
-  const data = JSON.parse(rawBody);
-  console.log("[exchangeCode] token received:", {
-    access_token: data.access_token ? `${data.access_token.slice(0, 8)}...(${data.access_token.length}chars)` : "MISSING",
-    refresh_token: data.refresh_token ? "present" : "MISSING",
-    expires_in: data.expires_in,
-  });
-
-  return {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: Date.now() + data.expires_in * 1000,
-  };
-}
-
-/** Cookie からアクセストークンを取得（なければエラー） */
-async function requireAccessToken(): Promise<string> {
-  const token = await getAccessToken();
+function getAccessToken(): string {
+  const token = process.env.MISOCA_ACCESS_TOKEN;
   if (!token) {
-    throw new Error("Misoca未連携です。先にOAuth認証を行ってください。");
+    throw new Error("MISOCA_ACCESS_TOKEN 環境変数が設定されていません");
   }
   return token;
 }
@@ -100,7 +17,7 @@ export async function createMisocaEstimate(
   recipientName: string,
   planIndex: number
 ): Promise<{ id: string; url: string }> {
-  const accessToken = await requireAccessToken();
+  const accessToken = getAccessToken();
 
   const today = new Date().toISOString().split("T")[0];
   const plan = estimate.plans[planIndex];
@@ -141,8 +58,7 @@ export async function createMisocaEstimate(
   };
 }
 
-/* ─── 連携状態チェック ─── */
-export async function isMisocaConnected(): Promise<boolean> {
-  const token = await getAccessToken();
-  return token !== null;
+/* ─── 設定チェック ─── */
+export function isMisocaConfigured(): boolean {
+  return !!process.env.MISOCA_ACCESS_TOKEN;
 }

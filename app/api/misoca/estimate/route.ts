@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createMisocaEstimate, isMisocaConnected } from "@/lib/misoca";
+import { createMisocaEstimate, isMisocaConfigured } from "@/lib/misoca";
 import type { EstimateData } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const connected = await isMisocaConnected();
-    console.log("[misoca/estimate] isMisocaConnected:", connected);
-    if (!connected) {
+    if (!isMisocaConfigured()) {
       return NextResponse.json(
-        { error: "Misocaに未連携です。先にOAuth認証を行ってください。" },
-        { status: 401 }
+        { error: "MISOCA_ACCESS_TOKEN 環境変数が設定されていません" },
+        { status: 500 }
       );
     }
 

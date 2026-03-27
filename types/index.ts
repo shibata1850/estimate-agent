@@ -185,12 +185,6 @@ export interface ChatMessage {
   content: string;
 }
 /* ─── Misoca ─── */
-export interface MisocaToken {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-}
-
 export interface MisocaEstimate {
   subject: string;
   issue_date: string;

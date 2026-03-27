@@ -62,8 +62,6 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Misoca連携
-  const [misocaStatus, setMisocaStatus] = useState<"unknown" | "connected" | "disconnected" | "no_config">("unknown");
-  const [misocaAuthUrl, setMisocaAuthUrl] = useState("");
   const [misocaCreating, setMisocaCreating] = useState(false);
   const [misocaResult, setMisocaResult] = useState<{ id: string; url: string } | null>(null);
   const [misocaError, setMisocaError] = useState("");
@@ -191,85 +189,9 @@ export default function Home() {
     } finally { setChatLoading(false); }
   };
 
-  /* ─── Misoca連携チェック ─── */
-  const checkMisoca = useCallback(async () => {
-    try {
-      const res = await fetch("/api/auth/misoca");
-      const data = await res.json();
-      if (data.connected) {
-        setMisocaStatus("connected");
-      } else if (data.authUrl) {
-        setMisocaStatus("disconnected");
-        setMisocaAuthUrl(data.authUrl);
-      } else {
-        setMisocaStatus("no_config");
-      }
-    } catch {
-      setMisocaStatus("no_config");
-    }
-  }, []);
-
-  useEffect(() => { checkMisoca(); }, [checkMisoca]);
-
-  // URL パラメータでMisoca認証結果を処理
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("misoca") === "connected") {
-      setMisocaStatus("connected");
-      // localStorageから見積データを復元
-      try {
-        const saved = localStorage.getItem("estimate_backup");
-        if (saved) {
-          const data = JSON.parse(saved);
-          if (data.input) setInput(data.input);
-          if (data.estimate) setEstimate(data.estimate);
-          if (data.selectedPlan !== undefined) setSelectedPlan(data.selectedPlan);
-          if (data.ctx) {
-            ctx.current = data.ctx;
-          }
-          setPhase("result");
-          setActiveTab("misoca");
-          localStorage.removeItem("estimate_backup");
-        }
-      } catch {}
-      window.history.replaceState({}, "", "/");
-    }
-    if (params.get("error") === "misoca_auth_failed" || params.get("error") === "misoca_token_failed") {
-      setMisocaError("Misoca認証に失敗しました。もう一度お試しください。");
-      // 失敗時もデータ復元
-      try {
-        const saved = localStorage.getItem("estimate_backup");
-        if (saved) {
-          const data = JSON.parse(saved);
-          if (data.input) setInput(data.input);
-          if (data.estimate) setEstimate(data.estimate);
-          if (data.selectedPlan !== undefined) setSelectedPlan(data.selectedPlan);
-          if (data.ctx) ctx.current = data.ctx;
-          setPhase("result");
-          setActiveTab("misoca");
-          localStorage.removeItem("estimate_backup");
-        }
-      } catch {}
-      window.history.replaceState({}, "", "/");
-    }
-  }, []);
-
   /* ─── Misocaで見積書作成 ─── */
-  const saveThenRedirectToMisoca = () => {
-    try {
-      localStorage.setItem("estimate_backup", JSON.stringify({
-        input,
-        estimate,
-        selectedPlan,
-        ctx: ctx.current,
-      }));
-    } catch {}
-    window.location.href = misocaAuthUrl;
-  };
-
   const createMisocaEstimate = async () => {
-    if (!estimate || misocaStatus !== "connected") return;
+    if (!estimate) return;
     setMisocaCreating(true);
     setMisocaError("");
     setMisocaResult(null);
@@ -546,16 +468,12 @@ export default function Home() {
                 {activeTab === "review" && <ReviewView r={estimate.subAgentReview} />}
                 {activeTab === "misoca" && (
                   <MisocaPanel
-                    status={misocaStatus}
-                    authUrl={misocaAuthUrl}
                     creating={misocaCreating}
                     result={misocaResult}
                     error={misocaError}
                     planLabel={plan?.tierLabel || ""}
                     companyName={input.companyName}
                     onCreate={createMisocaEstimate}
-                    onRecheck={checkMisoca}
-                    onAuth={saveThenRedirectToMisoca}
                   />
                 )}
               </div>
@@ -867,11 +785,11 @@ function ReviewView({ r }: { r: SubAgentReview }) {
 }
 
 /* ─── Misoca連携パネル ─── */
-function MisocaPanel({ status, authUrl, creating, result, error, planLabel, companyName, onCreate, onRecheck, onAuth }: {
-  status: string; authUrl: string; creating: boolean;
+function MisocaPanel({ creating, result, error, planLabel, companyName, onCreate }: {
+  creating: boolean;
   result: { id: string; url: string } | null; error: string;
   planLabel: string; companyName: string;
-  onCreate: () => void; onRecheck: () => void; onAuth: () => void;
+  onCreate: () => void;
 }) {
   return (
     <div>
@@ -883,88 +801,41 @@ function MisocaPanel({ status, authUrl, creating, result, error, planLabel, comp
         </div>
       </div>
 
-      {/* 接続状態 */}
-      <div className={`rounded-lg p-4 mb-4 ${
-        status === "connected" ? "bg-green-50 border border-green-200" :
-        status === "no_config" ? "bg-yellow-50 border border-yellow-200" :
-        "bg-gray-50 border border-gray-200"
-      }`}>
-        <div className="flex items-center gap-2 mb-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${
-            status === "connected" ? "bg-green-500" :
-            status === "no_config" ? "bg-yellow-500" : "bg-gray-400"
-          }`} />
-          <span className="text-sm font-medium text-gray-800">
-            {status === "connected" && "✅ Misoca連携済み"}
-            {status === "disconnected" && "⚪ 未連携 — 認証が必要です"}
-            {status === "no_config" && "⚠️ Misoca APIが未設定です"}
-            {status === "unknown" && "確認中..."}
-          </span>
+      {/* 見積書作成 */}
+      <div className="border rounded-lg p-4">
+        <h4 className="font-bold text-sm mb-3">📝 見積書を作成</h4>
+        <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm">
+          <p>以下の内容でMisocaに見積書を作成します:</p>
+          <div className="mt-2 space-y-1">
+            <p>• <strong>プラン:</strong> {planLabel}</p>
+            <p>• <strong>宛先:</strong> {companyName}</p>
+          </div>
         </div>
 
-        {status === "no_config" && (
-          <div className="text-sm text-gray-600 space-y-2">
-            <p>Misocaを使うには、<code className="bg-gray-200 px-1 rounded">.env</code> に以下を設定してください:</p>
-            <div className="bg-white rounded p-3 font-mono text-xs space-y-1">
-              <p>MISOCA_CLIENT_ID=あなたのアプリID</p>
-              <p>MISOCA_CLIENT_SECRET=あなたのシークレット</p>
-              <p>MISOCA_REDIRECT_URI=http://localhost:3000/api/auth/misoca/callback</p>
-            </div>
-            <p>アプリ登録は <a href="https://app.misoca.jp/oauth2/applications" target="_blank" className="text-blue-600 underline">Misoca開発者ページ</a> から行えます。</p>
-            <button onClick={onRecheck} className="text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg mt-2">
-              🔄 再チェック
-            </button>
-          </div>
-        )}
+        <button onClick={onCreate} disabled={creating}
+          className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition-colors">
+          {creating ? "⏳ 作成中..." : "📄 Misocaに見積書を送る"}
+        </button>
 
-        {status === "disconnected" && (
-          <div className="text-sm text-gray-600">
-            <p className="mb-2">Misocaアカウントと連携して、見積書PDFを自動作成できます。</p>
-            <a href="#" onClick={(e) => { e.preventDefault(); onAuth(); }}
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
-              🔑 Misocaと連携する
+        {/* 成功 */}
+        {result && (
+          <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-sm font-bold text-green-800 mb-2">✅ 見積書を作成しました！</p>
+            <p className="text-sm text-gray-600 mb-2">見積書ID: {result.id}</p>
+            <a href={result.url} target="_blank"
+              className="inline-block bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+              📄 Misocaで見積書を開く →
             </a>
           </div>
         )}
-      </div>
 
-      {/* 見積書作成 */}
-      {status === "connected" && (
-        <div className="border rounded-lg p-4">
-          <h4 className="font-bold text-sm mb-3">📝 見積書を作成</h4>
-          <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm">
-            <p>以下の内容でMisocaに見積書を作成します:</p>
-            <div className="mt-2 space-y-1">
-              <p>• <strong>プラン:</strong> {planLabel}</p>
-              <p>• <strong>宛先:</strong> {companyName}</p>
-            </div>
+        {/* エラー */}
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-700">❌ {error}</p>
           </div>
-
-          <button onClick={onCreate} disabled={creating}
-            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition-colors">
-            {creating ? "⏳ 作成中..." : "📄 Misocaで見積書を作成する"}
-          </button>
-
-          {/* 成功 */}
-          {result && (
-            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm font-bold text-green-800 mb-2">✅ 見積書を作成しました！</p>
-              <p className="text-sm text-gray-600 mb-2">見積書ID: {result.id}</p>
-              <a href={result.url} target="_blank"
-                className="inline-block bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                📄 Misocaで見積書を開く →
-              </a>
-            </div>
-          )}
-
-          {/* エラー */}
-          {error && (
-            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-700">❌ {error}</p>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* フロー説明 */}
       <div className="mt-6 bg-gray-50 rounded-lg p-4">
