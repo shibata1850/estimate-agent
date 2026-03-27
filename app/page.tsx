@@ -459,7 +459,7 @@ export default function Home() {
               </div>
 
               <div className="p-5">
-                {activeTab === "plans" && <PlansView e={estimate} sel={selectedPlan} setSel={setSelectedPlan} f={fmt} />}
+                {activeTab === "plans" && <PlansView e={estimate} sel={selectedPlan} setSel={setSelectedPlan} f={fmt} onUpdate={setEstimate} />}
                 {activeTab === "breakdown" && plan && <BreakdownView plan={plan} f={fmt} />}
                 {activeTab === "similar" && <SimilarView cases={estimate.similarCases} f={fmt} />}
                 {activeTab === "preconditions" && <PreconditionsView p={estimate.preconditions} />}
@@ -528,14 +528,73 @@ export default function Home() {
 
 /* ═══════════════════ サブコンポーネント ═══════════════════ */
 
-function PlansView({ e, sel, setSel, f }: { e: EstimateData; sel: number; setSel: (n:number)=>void; f:(n:number)=>string }) {
+function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: number; setSel: (n:number)=>void; f:(n:number)=>string; onUpdate: (e: EstimateData) => void }) {
+  const [editing, setEditing] = useState(false);
   const styles = ["border-indigo-400 bg-indigo-50", "border-green-400 bg-green-50", "border-orange-400 bg-orange-50"];
   const badges = ["bg-indigo-600", "bg-green-600", "bg-orange-600"];
   const plan = e.plans?.[sel];
+
+  const updateItem = (itemIdx: number, field: "name" | "description" | "quantity" | "unit" | "unitPrice", value: string) => {
+    const plans = [...e.plans];
+    const items = [...plans[sel].items];
+    const item = { ...items[itemIdx] };
+    if (field === "quantity" || field === "unitPrice") {
+      const num = parseInt(value) || 0;
+      (item as Record<string, unknown>)[field] = num;
+      item.amount = field === "quantity" ? num * item.unitPrice : item.quantity * num;
+    } else {
+      (item as Record<string, unknown>)[field] = value;
+    }
+    items[itemIdx] = item;
+    const subtotal = items.reduce((s, it) => s + it.amount, 0);
+    const riskBuffer = plans[sel].riskBuffer;
+    const tax = Math.floor((subtotal + riskBuffer) * plans[sel].taxRate);
+    plans[sel] = { ...plans[sel], items, subtotal, tax, total: subtotal + riskBuffer + tax };
+    onUpdate({ ...e, plans });
+  };
+
+  const removeItem = (itemIdx: number) => {
+    const plans = [...e.plans];
+    const items = plans[sel].items.filter((_, i) => i !== itemIdx);
+    const subtotal = items.reduce((s, it) => s + it.amount, 0);
+    const riskBuffer = plans[sel].riskBuffer;
+    const tax = Math.floor((subtotal + riskBuffer) * plans[sel].taxRate);
+    plans[sel] = { ...plans[sel], items, subtotal, tax, total: subtotal + riskBuffer + tax };
+    onUpdate({ ...e, plans });
+  };
+
+  const addItem = () => {
+    const plans = [...e.plans];
+    const items = [...plans[sel].items, { name: "新規項目", description: "", quantity: 1, unit: "式", unitPrice: 0, amount: 0 }];
+    plans[sel] = { ...plans[sel], items };
+    onUpdate({ ...e, plans });
+  };
+
+  const updateRiskBuffer = (value: string) => {
+    const plans = [...e.plans];
+    const riskBuffer = parseInt(value) || 0;
+    const tax = Math.floor((plans[sel].subtotal + riskBuffer) * plans[sel].taxRate);
+    plans[sel] = { ...plans[sel], riskBuffer, tax, total: plans[sel].subtotal + riskBuffer + tax };
+    onUpdate({ ...e, plans });
+  };
+
   return (
     <div>
-      <h3 className="text-lg font-bold mb-1">{e.title}</h3>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-lg font-bold">{e.title}</h3>
+        <button onClick={() => setEditing(!editing)}
+          className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+            editing ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+          }`}>
+          {editing ? "✅ 編集完了" : "✏️ 見積を編集"}
+        </button>
+      </div>
       <p className="text-sm text-gray-600 mb-4">{e.summary}</p>
+      {editing && (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 text-xs text-yellow-800">
+          📝 各項目の品名・数量・単価を直接クリックして編集できます。行の削除・追加も可能です。変更は即座に合計に反映されます。
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-3 mb-6">
         {e.plans?.map((p, i) => (
           <button key={p.tier} onClick={() => setSel(i)}
@@ -571,21 +630,59 @@ function PlansView({ e, sel, setSel, f }: { e: EstimateData; sel: number; setSel
               <th className="text-center p-2 border w-12">単位</th>
               <th className="text-right p-2 border w-24">単価</th>
               <th className="text-right p-2 border w-28">金額</th>
+              {editing && <th className="p-2 border w-10"></th>}
             </tr></thead>
             <tbody>{plan.items?.map((it, i) => (
               <tr key={i} className="hover:bg-gray-50">
-                <td className="p-2 border"><div className="font-medium">{it.name}</div><div className="text-xs text-gray-500">{it.description}</div></td>
-                <td className="text-right p-2 border">{it.quantity}</td>
-                <td className="text-center p-2 border">{it.unit}</td>
-                <td className="text-right p-2 border">¥{f(it.unitPrice)}</td>
+                <td className="p-2 border">
+                  {editing ? (
+                    <div className="space-y-1">
+                      <input className="w-full border rounded px-2 py-1 text-sm font-medium" value={it.name}
+                        onChange={ev => updateItem(i, "name", ev.target.value)} />
+                      <input className="w-full border rounded px-2 py-0.5 text-xs text-gray-500" value={it.description}
+                        placeholder="説明" onChange={ev => updateItem(i, "description", ev.target.value)} />
+                    </div>
+                  ) : (
+                    <><div className="font-medium">{it.name}</div><div className="text-xs text-gray-500">{it.description}</div></>
+                  )}
+                </td>
+                <td className="text-right p-2 border">
+                  {editing ? <input type="number" className="w-full border rounded px-2 py-1 text-sm text-right" value={it.quantity}
+                    onChange={ev => updateItem(i, "quantity", ev.target.value)} /> : it.quantity}
+                </td>
+                <td className="text-center p-2 border">
+                  {editing ? <input className="w-full border rounded px-1 py-1 text-xs text-center" value={it.unit}
+                    onChange={ev => updateItem(i, "unit", ev.target.value)} /> : it.unit}
+                </td>
+                <td className="text-right p-2 border">
+                  {editing ? <input type="number" className="w-full border rounded px-2 py-1 text-sm text-right" value={it.unitPrice}
+                    onChange={ev => updateItem(i, "unitPrice", ev.target.value)} /> : `¥${f(it.unitPrice)}`}
+                </td>
                 <td className="text-right p-2 border font-medium">¥{f(it.amount)}</td>
+                {editing && (
+                  <td className="p-2 border text-center">
+                    <button onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 text-xs">✕</button>
+                  </td>
+                )}
               </tr>
             ))}</tbody>
             <tfoot className="bg-gray-50 font-medium">
-              <tr><td colSpan={4} className="text-right p-2 border">小計</td><td className="text-right p-2 border">¥{f(plan.subtotal)}</td></tr>
-              {plan.riskBuffer > 0 && <tr><td colSpan={4} className="text-right p-2 border text-orange-600">リスクバッファ</td><td className="text-right p-2 border text-orange-600">¥{f(plan.riskBuffer)}</td></tr>}
-              <tr><td colSpan={4} className="text-right p-2 border">消費税</td><td className="text-right p-2 border">¥{f(plan.tax)}</td></tr>
-              <tr className="text-lg"><td colSpan={4} className="text-right p-2 border font-bold">合計</td><td className="text-right p-2 border font-bold text-blue-700">¥{f(plan.total)}</td></tr>
+              {editing && (
+                <tr><td colSpan={editing ? 6 : 5} className="p-2 border">
+                  <button onClick={addItem} className="text-blue-600 hover:text-blue-800 text-xs font-medium">+ 項目を追加</button>
+                </td></tr>
+              )}
+              <tr><td colSpan={4} className="text-right p-2 border">小計</td><td className="text-right p-2 border" colSpan={editing ? 2 : 1}>¥{f(plan.subtotal)}</td></tr>
+              {(plan.riskBuffer > 0 || editing) && (
+                <tr><td colSpan={4} className="text-right p-2 border text-orange-600">リスクバッファ</td>
+                  <td className="text-right p-2 border text-orange-600" colSpan={editing ? 2 : 1}>
+                    {editing ? <input type="number" className="w-full border rounded px-2 py-1 text-sm text-right" value={plan.riskBuffer}
+                      onChange={ev => updateRiskBuffer(ev.target.value)} /> : `¥${f(plan.riskBuffer)}`}
+                  </td>
+                </tr>
+              )}
+              <tr><td colSpan={4} className="text-right p-2 border">消費税</td><td className="text-right p-2 border" colSpan={editing ? 2 : 1}>¥{f(plan.tax)}</td></tr>
+              <tr className="text-lg"><td colSpan={4} className="text-right p-2 border font-bold">合計</td><td className="text-right p-2 border font-bold text-blue-700" colSpan={editing ? 2 : 1}>¥{f(plan.total)}</td></tr>
             </tfoot>
           </table>
           {plan.monthlyOperationCost > 0 && (
@@ -627,8 +724,9 @@ function SimilarView({ cases, f }: { cases: SimilarCase[]; f:(n:number)=>string 
   if (!cases?.length) return <p className="text-gray-500">類似案件データなし</p>;
   return (
     <div>
-      <h3 className="text-lg font-bold mb-2">🔍 類似案件</h3>
-      <p className="text-sm text-gray-500 mb-4">過去の類似案件を参考に金額の妥当性を示します</p>
+      <h3 className="text-lg font-bold mb-2">🔍 類似案件（参考データ）</h3>
+      <p className="text-sm text-gray-500 mb-2">業界相場に基づくAI生成の参考データです（実在の案件ではありません）</p>
+      <p className="text-xs text-gray-400 mb-4">参考: IPA「ソフトウェア開発データ白書」、経済産業省「DXレポート」等の公開データに基づく市場相場</p>
       <div className="space-y-3">
         {cases.map((c, i) => (
           <div key={i} className="border rounded-lg p-4">
