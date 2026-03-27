@@ -5,6 +5,7 @@ import type { EstimateData } from "@/types";
 export async function POST(req: NextRequest) {
   try {
     const connected = await isMisocaConnected();
+    console.log("[misoca/estimate] isMisocaConnected:", connected);
     if (!connected) {
       return NextResponse.json(
         { error: "Misocaに未連携です。先にOAuth認証を行ってください。" },
