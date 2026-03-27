@@ -546,9 +546,9 @@ function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: numb
       (item as Record<string, unknown>)[field] = value;
     }
     items[itemIdx] = item;
-    const subtotal = items.reduce((s, it) => s + it.amount, 0);
+    const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
     const riskBuffer = plans[sel].riskBuffer;
-    const tax = Math.floor((subtotal + riskBuffer) * plans[sel].taxRate);
+    const tax = Math.floor((subtotal + riskBuffer) * 0.1);
     plans[sel] = { ...plans[sel], items, subtotal, tax, total: subtotal + riskBuffer + tax };
     onUpdate({ ...e, plans });
   };
@@ -556,9 +556,9 @@ function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: numb
   const removeItem = (itemIdx: number) => {
     const plans = [...e.plans];
     const items = plans[sel].items.filter((_, i) => i !== itemIdx);
-    const subtotal = items.reduce((s, it) => s + it.amount, 0);
+    const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
     const riskBuffer = plans[sel].riskBuffer;
-    const tax = Math.floor((subtotal + riskBuffer) * plans[sel].taxRate);
+    const tax = Math.floor((subtotal + riskBuffer) * 0.1);
     plans[sel] = { ...plans[sel], items, subtotal, tax, total: subtotal + riskBuffer + tax };
     onUpdate({ ...e, plans });
   };
@@ -573,8 +573,9 @@ function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: numb
   const updateRiskBuffer = (value: string) => {
     const plans = [...e.plans];
     const riskBuffer = parseInt(value) || 0;
-    const tax = Math.floor((plans[sel].subtotal + riskBuffer) * plans[sel].taxRate);
-    plans[sel] = { ...plans[sel], riskBuffer, tax, total: plans[sel].subtotal + riskBuffer + tax };
+    const itemsTotal = plans[sel].items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+    const tax = Math.floor((itemsTotal + riskBuffer) * 0.1);
+    plans[sel] = { ...plans[sel], riskBuffer, subtotal: itemsTotal, tax, total: itemsTotal + riskBuffer + tax };
     onUpdate({ ...e, plans });
   };
 
@@ -602,7 +603,7 @@ function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: numb
             {i === 1 && <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs px-2 py-0.5 rounded-full">おすすめ</span>}
             <span className={`inline-block text-xs text-white px-2 py-0.5 rounded-full mb-2 ${badges[i]}`}>{p.tierLabel}</span>
             <div className="text-xs text-gray-500 mb-1">{p.priority}</div>
-            <div className="text-xl font-bold">¥{f(p.total)}</div>
+            {(() => { const sub = p.items.reduce((s, x) => s + x.unitPrice * x.quantity, 0) + p.riskBuffer; return <div className="text-xl font-bold">¥{f(sub + Math.floor(sub * 0.1))}</div>; })()}
             <div className="text-xs text-gray-500">税込 / {p.estimatedDays}日</div>
             <div className="mt-2 text-xs">
               <div className="text-green-600">✅ {p.pros?.[0]}</div>
@@ -658,7 +659,7 @@ function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: numb
                   {editing ? <input type="number" className="w-full border rounded px-2 py-1 text-sm text-right" value={it.unitPrice}
                     onChange={ev => updateItem(i, "unitPrice", ev.target.value)} /> : `¥${f(it.unitPrice)}`}
                 </td>
-                <td className="text-right p-2 border font-medium">¥{f(it.amount)}</td>
+                <td className="text-right p-2 border font-medium">¥{f(it.unitPrice * it.quantity)}</td>
                 {editing && (
                   <td className="p-2 border text-center">
                     <button onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 text-xs">✕</button>
@@ -672,7 +673,12 @@ function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: numb
                   <button onClick={addItem} className="text-blue-600 hover:text-blue-800 text-xs font-medium">+ 項目を追加</button>
                 </td></tr>
               )}
-              <tr><td colSpan={4} className="text-right p-2 border">小計</td><td className="text-right p-2 border" colSpan={editing ? 2 : 1}>¥{f(plan.subtotal)}</td></tr>
+              {(() => {
+                const calcSubtotal = plan.items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+                const calcSubWithBuffer = calcSubtotal + plan.riskBuffer;
+                const calcTax = Math.floor(calcSubWithBuffer * 0.1);
+                return (<>
+              <tr><td colSpan={4} className="text-right p-2 border">小計</td><td className="text-right p-2 border" colSpan={editing ? 2 : 1}>¥{f(calcSubtotal)}</td></tr>
               {(plan.riskBuffer > 0 || editing) && (
                 <tr><td colSpan={4} className="text-right p-2 border text-orange-600">リスクバッファ</td>
                   <td className="text-right p-2 border text-orange-600" colSpan={editing ? 2 : 1}>
@@ -681,8 +687,9 @@ function PlansView({ e, sel, setSel, f, onUpdate }: { e: EstimateData; sel: numb
                   </td>
                 </tr>
               )}
-              <tr><td colSpan={4} className="text-right p-2 border">消費税</td><td className="text-right p-2 border" colSpan={editing ? 2 : 1}>¥{f(plan.tax)}</td></tr>
-              <tr className="text-lg"><td colSpan={4} className="text-right p-2 border font-bold">合計</td><td className="text-right p-2 border font-bold text-blue-700" colSpan={editing ? 2 : 1}>¥{f(plan.total)}</td></tr>
+              <tr><td colSpan={4} className="text-right p-2 border">消費税</td><td className="text-right p-2 border" colSpan={editing ? 2 : 1}>¥{f(calcTax)}</td></tr>
+              <tr className="text-lg"><td colSpan={4} className="text-right p-2 border font-bold">合計</td><td className="text-right p-2 border font-bold text-blue-700" colSpan={editing ? 2 : 1}>¥{f(calcSubWithBuffer + calcTax)}</td></tr>
+                </>); })()}
             </tfoot>
           </table>
           {plan.monthlyOperationCost > 0 && (
@@ -923,15 +930,25 @@ function MisocaPanel({ creating, result, error, planLabel, companyName, estimate
               </div>
             </div>
             <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xl font-bold text-blue-800">
-                合計金額: {fmt(plan.total)}円
-                <span className="text-sm font-normal text-gray-500 ml-2">（税込）</span>
-              </p>
+              {(() => {
+                const it = plan.items.reduce((s, x) => s + x.unitPrice * x.quantity, 0) + plan.riskBuffer;
+                return <p className="text-xl font-bold text-blue-800">
+                  合計金額: {fmt(it + Math.floor(it * 0.1))}円
+                  <span className="text-sm font-normal text-gray-500 ml-2">（税込）</span>
+                </p>;
+              })()}
             </div>
           </div>
 
           {/* 明細テーブル */}
           <div className="p-4">
+            {(() => {
+              const itemsTotal = plan.items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+              const previewSubtotal = itemsTotal + plan.riskBuffer;
+              const previewTax = Math.floor(previewSubtotal * 0.1);
+              const previewTotal = previewSubtotal + previewTax;
+              return (
+                <>
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-100 border-b-2 border-gray-300">
@@ -952,7 +969,7 @@ function MisocaPanel({ creating, result, error, planLabel, companyName, estimate
                     <td className="text-right py-2 px-3">{item.quantity}</td>
                     <td className="text-center py-2 px-3">{item.unit}</td>
                     <td className="text-right py-2 px-3">{fmt(item.unitPrice)}</td>
-                    <td className="text-right py-2 px-3">{fmt(item.amount)}</td>
+                    <td className="text-right py-2 px-3">{fmt(item.unitPrice * item.quantity)}</td>
                   </tr>
                 ))}
                 {plan.riskBuffer > 0 && (
@@ -974,18 +991,21 @@ function MisocaPanel({ creating, result, error, planLabel, companyName, estimate
               <div className="w-64 text-sm">
                 <div className="flex justify-between py-1 border-b border-gray-200">
                   <span className="text-gray-600">小計</span>
-                  <span>{fmt(plan.subtotal + plan.riskBuffer)}</span>
+                  <span>{fmt(previewSubtotal)}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-gray-200">
                   <span className="text-gray-600">消費税（10%）</span>
-                  <span>{fmt(plan.tax)}</span>
+                  <span>{fmt(previewTax)}</span>
                 </div>
                 <div className="flex justify-between py-2 font-bold text-base border-b-2 border-gray-800">
                   <span>合計</span>
-                  <span>{fmt(plan.total)}円</span>
+                  <span>{fmt(previewTotal)}円</span>
                 </div>
               </div>
             </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* 備考 */}
